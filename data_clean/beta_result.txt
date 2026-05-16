@@ -1,0 +1,1 @@
+{'SP500': np.float64(0.082), 'Gold_ETF': np.float64(0.2118), 'Bitcoin': np.float64(-0.2742), 'Nasdaq100': np.float64(0.0738)}
