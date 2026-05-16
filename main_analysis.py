@@ -103,17 +103,22 @@ def plot_all(df):
 
 # ===================== 拓展方向代码（零依赖 · 无报错） =====================
 def export_extra_results(df):
-    # 拓展1：实际利率
+    # 拓展1：实际利率（兼容pce_yoy列缺失的情况）
     df['real_rate'] = df['fedfunds'] - df.get('pce_yoy', 0)
 
-    # 拓展2：利率敏感性 β（纯 numpy 计算）
+    # 拓展2：利率敏感性 β（修复维度不匹配问题）
     def beta_np(x, y):
-        x = x.dropna()
-        y = y.dropna()
-        common = x.index.intersection(y.index)
-        x = x.loc[common]
-        y = y.loc[common]
-        return np.cov(x, y)[0, 1] / np.var(x)
+        # 步骤1：对齐索引（只保留两者都非空的行）
+        common_idx = x.dropna().index.intersection(y.dropna().index)
+        if len(common_idx) < 2:  # 样本数不足时返回0，避免除以0错误
+            return 0.0
+        x_aligned = x.loc[common_idx].values
+        y_aligned = y.loc[common_idx].values
+        
+        # 步骤2：计算协方差/方差（确保维度匹配）
+        cov = np.cov(x_aligned, y_aligned)[0, 1]
+        var_x = np.var(x_aligned)
+        return cov / var_x if var_x != 0 else 0.0  # 避免除以0
 
     # 输出β
     beta_result = {}
@@ -122,16 +127,18 @@ def export_extra_results(df):
             b = beta_np(df['fedfunds'], df[f'{ast}_ret'])
             beta_result[ast] = round(b, 4)
 
+    # 保存β结果（用csv更规范，也兼容txt）
+    pd.DataFrame(beta_result, index=['β']).T.to_csv(os.path.join(CLEAN, "beta_result.csv"), encoding='utf-8')
     with open(os.path.join(CLEAN, "beta_result.txt"), 'w', encoding='utf-8') as f:
         f.write(str(beta_result))
 
-    # 拓展3：VIX 周期分析
+    # 拓展3：VIX 周期分析（兼容VIX列缺失）
     if 'VIX' in df.columns:
         vix_mean = df.groupby('cycle')['VIX'].mean().round(2)
-        vix_mean.to_csv(os.path.join(CLEAN, "vix_by_cycle.csv"))
+        vix_mean.to_csv(os.path.join(CLEAN, "vix_by_cycle.csv"), encoding='utf-8')
 
     # 保存拓展数据
-    df.to_csv(os.path.join(CLEAN, "extended_data.csv"))
+    df.to_csv(os.path.join(CLEAN, "extended_data.csv"), encoding='utf-8')
     print("✅ 拓展分析完成：实际利率、利率敏感性β、VIX周期分析")
 
 # ===================== 主程序 =====================
